@@ -8,3 +8,15 @@ retinanet检测人脸 ----> 裁剪出人脸 ----> facenet输出128维向量 ----
 retinanet：
 
 ![detect29](G:\6\AI_code\cv\retinanet\retinanet\picture\detect29.png)
+
+facenet数据集格式：
+
+/---
+
+  |---person0（imgs）
+
+  |---person1（imgs）
+
+.....
+
+(未完待续)

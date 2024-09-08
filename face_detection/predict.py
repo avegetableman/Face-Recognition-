@@ -1,5 +1,5 @@
 import torch
-from onx import QuantizableModel
+from onnx import QuantizableModel
 net=torch.load('face.bin',map_location='cpu').eval()
 f1=r"E:/6/AI/dataset/datasets/0000045/001.jpg"
 f2=r"E:/6/AI/dataset/datasets/0000045/008.jpg"
