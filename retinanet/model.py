@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-
+from attention import Attention
 def conv3x3(in_planes, out_planes, stride=1):
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
 
@@ -224,8 +224,69 @@ class Retinanet(nn.Module):
         classification = torch.cat([self.classify(j) for j in pooled_features],dim=1)
         return regression, classification
 
+class FPN_with_attention(nn.Module):
+    def __init__(self, C3_size, C4_size, C5_size, feature_size=256):
+        super().__init__()
+        self.P5_a1 = Attention(C5_size)
+        self.P5_1 = nn.Conv2d(C5_size, feature_size, kernel_size=1, stride=1, padding=0)
+        self.P5_upsampled = nn.Upsample(scale_factor=2, mode='nearest')
+        self.P5_a2 = Attention(feature_size)
+        self.P5_2 = nn.Conv2d(feature_size, feature_size, kernel_size=3, stride=1, padding=1)
+        self.P4_a1 = Attention(C4_size)
+        self.P4_1 = nn.Conv2d(C4_size, feature_size, kernel_size=1, stride=1, padding=0)
+        self.P4_upsampled = nn.Upsample(scale_factor=2, mode='nearest')
+        self.P4_a2 = Attention(feature_size)
+        self.P4_2 = nn.Conv2d(feature_size, feature_size, kernel_size=3, stride=1, padding=1)
+        self.P3_a1 = Attention(C3_size)
+        self.P3_1 = nn.Conv2d(C3_size, feature_size, kernel_size=1, stride=1, padding=0)
+        self.P3_a2 = Attention(feature_size)
+        self.P3_2 = nn.Conv2d(feature_size, feature_size, kernel_size=3, stride=1, padding=1)
+        self.P6 = nn.Conv2d(C5_size, feature_size, kernel_size=3, stride=2, padding=1)
+        self.P7_1 = nn.ReLU()
+        self.P7_a2 = Attention(feature_size)
+        self.P7_2 = nn.Conv2d(feature_size, feature_size, kernel_size=3, stride=2, padding=1)
+    def forward(self, inputs):
+        C3, C4, C5 = inputs
+        C5 = self.P5_a1(C5)
+        P5_x = self.P5_1(C5)
+        P5_upsampled_x = self.P5_upsampled(P5_x)
+        P5_x = self.P5_a2(P5_x)
+        P5_x = self.P5_2(P5_x)
+        C4 = self.P4_a1(C4)
+        P4_x = self.P4_1(C4)
+        P4_x = P5_upsampled_x + P4_x
+        P4_upsampled_x = self.P4_upsampled(P4_x)
+        P4_x = self.P4_a2(P4_x)
+        P4_x = self.P4_2(P4_x)
+        C3 = self.P3_a1(C3)
+        P3_x = self.P3_1(C3)
+        P3_x = P3_x + P4_upsampled_x
+        P3_x = self.P3_a2(P3_x)
+        P3_x = self.P3_2(P3_x)
+
+        P6_x = self.P6(C5)
+
+        P7_x = self.P7_1(P6_x)
+        P7_x=self.P7_a2(P7_x)
+        P7_x = self.P7_2(P7_x)
+        return [P3_x, P4_x, P5_x, P6_x, P7_x]
+
+class Retinanet_with_attention(nn.Module):
+    def __init__(self, num_classes=1):
+        super().__init__()
+        self.backbone = ResNet18()
+        self.fpn = FPN_with_attention(C3_size=128,C4_size=256,C5_size=512)
+        self.regress = Regress(num_features_in=256)
+        self.classify = Classfiy(num_features_in=256,num_classes=num_classes)
+    def forward(self,x):
+        features = self.backbone(x)
+        pooled_features = self.fpn(features)
+        regression = torch.cat([self.regress(i) for i in pooled_features],dim=1)
+        classification = torch.cat([self.classify(j) for j in pooled_features],dim=1)
+        return regression, classification
+
 if __name__ == '__main__':
-    model = Retinanet()
+    model = Retinanet_with_attention()
     x = torch.randn(1, 3, 224,224)
     y,_ = model(x)
     print(_.shape)
